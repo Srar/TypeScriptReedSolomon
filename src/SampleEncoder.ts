@@ -60,14 +60,11 @@ for (let i = 0; i < TOTAL_SHARDS; i++) {
         shards[i] = Buffer.alloc(shardSize);
     }
 }
-
 console.log(shards);
 
+console.log();
 let reedSolomon: ReedSolomon = new ReedSolomon(DATA_SHARDS, PARITY_SHARDS);
 reedSolomon.encodeParity(shards, 0, shardSize);
+console.log(shards);
 
-// console.log();
-// console.log(shards);
-
-// console.log(shards.length);
 

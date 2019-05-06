@@ -79,11 +79,6 @@ export default class Matrix {
             throw new RangeError(`Columns on left(${this.getColumns()}) is different than rows on right (${this.getRows})`);
         }
 
-        console.log();
-        console.log("times:");
-        console.log(this.data);
-        console.log(right.data);
-
         const result: Matrix = new Matrix(this.getRows(), right.getColumns());
         for (let r = 0; r < this.getRows(); r++) {
             for (let c = 0; c < right.getColumns(); c++) {
@@ -96,7 +91,6 @@ export default class Matrix {
             }
         }
 
-        console.log();
         return result;
     }
 

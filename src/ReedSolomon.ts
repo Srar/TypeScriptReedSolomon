@@ -62,9 +62,6 @@ export default class ReedSolomon {
             outputs, this.parityShardCount,
             offset, byteCount
         );
-
-        console.log("console.log(shards);");
-        console.log(shards);
     }
 
     private checkBuffersAndSizes(shards: number[][], offset: number, byteCount: number) {
