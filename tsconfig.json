@@ -1,0 +1,12 @@
+{
+    "compilerOptions": {
+        "baseUrl": "./src/",
+        "outDir": "./build/",
+        "target": "es6",
+        "allowJs": true,
+        "module": "commonjs",
+        "allowUnreachableCode": true,
+        "experimentalDecorators": true,
+        "sourceMap": true
+    }
+}
