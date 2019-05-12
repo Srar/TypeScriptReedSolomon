@@ -44,7 +44,7 @@ export default class ReedSolomon {
         // preserve the property that any square subset of rows is
         // invertible.
         const top: Matrix = vandermonde.submatrix(0, 0, dataShards, dataShards);
-        
+
         return vandermonde.times(top.invert());
     }
 
@@ -64,18 +64,116 @@ export default class ReedSolomon {
         );
     }
 
-    private checkBuffersAndSizes(shards: number[][], offset: number, byteCount: number) {
-        if (shards.length !== this.totalShardCount) {
-            throw new RangeError(`wrong number of shards: ${shards.length}`);
+    public decodeMissing(rawShards: Buffer[], offset: number, byteCount: number): Buffer[] {
+        if (this.totalShardCount === rawShards.length) {
+            const result: Buffer[] = [];
+            for (const rawShard of rawShards) {
+                const shardOffset: number = rawShard[0];
+                const shardData: Buffer = rawShard.slice(1);
+                if(shardOffset >= this.dataShardCount) {
+                    continue;
+                }
+                result[shardOffset] = shardData;
+            }
+            return result;
         }
 
-        if (offset < 0) {
-            throw new RangeError(`offset is negative: ${offset}`);
+        if (rawShards.length < this.dataShardCount) {
+            throw new Error("Not enough shards present");
         }
 
-        if (byteCount < 0) {
-            throw new RangeError(`byteCount is negative: ${byteCount}`);
+        let shards: Buffer[] = [];
+        let shardSize: number = 0;
+        let shardPresent: boolean[] = new Array(this.totalShardCount).fill(false);
+        for (let index = 0; index < this.totalShardCount; index++) {
+            if (rawShards[index]) {
+                shardSize = rawShards[index].length - 1;
+                shards[rawShards[index][0]] = rawShards[index].slice(1);
+                shardPresent[rawShards[index][0]] = true;
+            }
         }
+        for (let index = 0; index < this.totalShardCount; index++) {
+            if (shards[index] === undefined) {
+                shards[index] = Buffer.alloc(shardSize);
+            }
+        }
+
+        // Pull out the rows of the matrix that correspond to the
+        // shards that we have and build a square matrix.  This
+        // matrix could be used to generate the shards that we have
+        // from the original data.
+        //
+        // Also, pull out an array holding just the shards that
+        // correspond to the rows of the submatrix.  These shards
+        // will be the input to the decoding process that re-creates
+        // the missing data shards.
+        const subMatrix: Matrix = new Matrix(this.dataShardCount, this.dataShardCount);
+        let subShards: Buffer[] = [];
+        {
+            let subMatrixRow: number = 0;
+            for (let matrixRow = 0; matrixRow < this.totalShardCount && subMatrixRow < this.dataShardCount; matrixRow++) {
+                if (shardPresent[matrixRow]) {
+                    for (let c = 0; c < this.dataShardCount; c++) {
+                        subMatrix.set(subMatrixRow, c, this.matrix.get(matrixRow, c));
+                    }
+                    subShards.push(shards[matrixRow]);
+                    subMatrixRow++;
+                }
+            }
+        }
+
+        // Invert the matrix, so we can go from the encoded shards
+        // back to the original data.  Then pull out the row that
+        // generates the shard that we want to decode.  Note that
+        // since this matrix maps back to the orginal data, it can
+        // be used to create a data shard, but not a parity shard.
+        const dataDecodeMatrix: Matrix = subMatrix.invert();
+
+        // Re-create any data shards that were missing.
+        //
+        // The input to the coding is all of the shards we actually
+        // have, and the output is the missing data shards.  The computation
+        // is done using the special decode matrix we just built.
+        let outputs: Buffer[] = [];
+        let matrixRows: Buffer[] = [];
+        let outputCount: number = 0;
+        for (let iShard = 0; iShard < this.dataShardCount; iShard++) {
+            if (!shardPresent[iShard]) {
+                outputs[outputCount] = shards[iShard];
+                matrixRows[outputCount] = dataDecodeMatrix.getRow(iShard);
+                outputCount++;
+            }
+        }
+
+        new InputOutputByteTableCodingLoop().codeSomeShards(
+            matrixRows,
+            subShards, this.dataShardCount,
+            outputs, outputCount,
+            offset, byteCount
+        );
+
+        // Now that we have all of the data shards intact, we can
+        // compute any of the parity that is missing.
+        //
+        // The input to the coding is ALL of the data shards, including
+        // any that we just calculated.  The output is whichever of the
+        // data shards were missing.
+        outputCount = 0;
+        for (let iShard = this.dataShardCount; iShard < this.totalShardCount; iShard++) {
+            if (!shardPresent[iShard]) {
+                outputs[outputCount] = shards[iShard];
+                matrixRows[outputCount] = this.parityRows[iShard - this.dataShardCount];
+                outputCount += 1;
+            }
+        }
+
+        new InputOutputByteTableCodingLoop().codeSomeShards(
+            matrixRows,
+            shards, this.dataShardCount,
+            outputs, outputCount,
+            offset, byteCount);
+
+        return shards.slice(0, this.dataShardCount);
     }
 
     public static vandermonde(rows: number, columns: number): Matrix {

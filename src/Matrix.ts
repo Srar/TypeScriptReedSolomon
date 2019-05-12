@@ -66,7 +66,7 @@ export default class Matrix {
         if (value < 0 || value > 255) {
             throw new RangeError("Value out of range: " + value);
         }
-        this.data[row][column] = value;;
+        this.data[row][column] = value;
     }
 
     /**

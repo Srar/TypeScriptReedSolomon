@@ -4,9 +4,8 @@ import ReedSolomon from "./ReedSolomon";
 
 const DATA_SHARDS: number = 4;
 const PARITY_SHARDS: number = 2;
-const TOTAL_SHARDS: number = DATA_SHARDS + PARITY_SHARDS;
-
 const BYTES_IN_INT: number = 4;
+const TOTAL_SHARDS: number = DATA_SHARDS + PARITY_SHARDS;
 
 if (process.argv.length !== 3) {
     console.log("Usage: ts-node SampleEncoder.ts <fileName>");
@@ -39,10 +38,7 @@ console.log(`Shard size: ${shardSize}`);
 const bufferSize: number = shardSize * DATA_SHARDS;
 const allBytes: Buffer = Buffer.alloc(bufferSize);
 
-allBytes[0] = (fileSize >> 24);
-allBytes[1] = (fileSize >> 16);
-allBytes[2] = (fileSize >> 8);
-allBytes[3] = fileSize;
+allBytes.writeUInt32BE(fileSize, 0);
 fileBytes.forEach((e, i) => allBytes[4 + i] = e);
 
 console.log("File bytes:");
@@ -63,8 +59,16 @@ for (let i = 0; i < TOTAL_SHARDS; i++) {
 console.log(shards);
 
 console.log();
+
 let reedSolomon: ReedSolomon = new ReedSolomon(DATA_SHARDS, PARITY_SHARDS);
 reedSolomon.encodeParity(shards, 0, shardSize);
+for (let index = 0; index < shards.length; index++) {
+    const shard: Buffer = shards[index];
+    const offset: Buffer = Buffer.allocUnsafe(1);
+    offset[0] = index;
+    shards[index] = Buffer.concat([offset, shard]);
+}
+
 console.log(shards);
 
 
